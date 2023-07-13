@@ -1,0 +1,325 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- scan allows changing the configuration at runtime while the system is running -->
+<!-- default scan period set to 1 minute, add scanPeriod="x minutes" to reduce the number of times the scan is performed -->
+<!-- This configuration is intended for the medium environment meant to be used by many users via distributed clients -->
+<configuration scan="true" scanPeriod="30 seconds">
+    <!-- allows configuration via jConsole -->
+    <jmxConfigurator />
+
+    <contextListener class="ch.qos.logback.classic.jul.LevelChangePropagator">
+        <resetJUL>true</resetJUL>
+    </contextListener>
+
+    <!-- log filenames and locations -->
+    <!-- log file directories -->
+    <property name="logDirectory" value="${com.sun.aas.instanceRoot}/logs/iuclid6" />
+    <property name="logArchiveDirectory" value="${logDirectory}/archive" />
+    <!-- log filenames -->
+    <property name="iuclid6Log" value="iuclid6.log" />
+    <property name="mainLogFileName" value="all_${iuclid6Log}" />
+    <property name="errorLogFileName" value="error_${iuclid6Log}" />
+    <property name="userActionsLogFileName" value="user_actions_${iuclid6Log}" />
+    <property name="jobsLogFileName" value="jobs_${iuclid6Log}" />
+    <property name="perfLogFileName" value="perf_${iuclid6Log}" />
+    <property name="metricsLogFileName" value="metrics_${iuclid6Log}" />
+
+    <property name="fileAppenderPattern" value="%date{'yyyy-MM-dd HH:mm:ss,SSSXXX', UTC}| %-30.30thread | %-5level | %logger{50} | {%mdc} | %msg %n" />
+
+    <!-- backup stuff -->
+    <!-- daily rollover -->
+    <property name="rolloverInterval" value="%d{yyyyMMdd}" />
+    <!-- keep about 6 months' worth of history -->
+    <property name="numberOfBackups" value="30" />
+
+    <!-- console appender, generally useful during development -->
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%yellow(%date{'yyyy-MM-dd HH:mm:ss,SSS'}) %cyan(%-22([%.20thread])) %highlight(%-5level) %cyan(%30logger{30}) %yellow(%msg) %n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- main log file, accepts everything -->
+    <appender name="MAIN_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${logDirectory}/${mainLogFileName}</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>${logArchiveDirectory}/${rolloverInterval}/${mainLogFileName}.zip</fileNamePattern> <!-- store archive compressed -->
+            <maxHistory>${numberOfBackups}</maxHistory>
+            <cleanHistoryOnStart>true</cleanHistoryOnStart>
+        </rollingPolicy>
+        <encoder>
+            <pattern>${fileAppenderPattern}</pattern>
+        </encoder>
+    </appender>
+
+    <!-- error log file, accepts warnings and exceptions from everywhere -->
+    <appender name="ERROR_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <!-- DENY all events with a level below WARN, that is TRACE, DEBUG and INFO -->
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>WARN</level>
+        </filter>
+        <file>${logDirectory}/${errorLogFileName}</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>${logArchiveDirectory}/${rolloverInterval}/${errorLogFileName}.zip</fileNamePattern>
+            <maxHistory>${numberOfBackups}</maxHistory>
+            <cleanHistoryOnStart>true</cleanHistoryOnStart>
+        </rollingPolicy>
+        <encoder>
+            <pattern>${fileAppenderPattern}</pattern>
+        </encoder>
+    </appender>
+
+    <!-- contains the logs from users' actions -->
+    <appender name="USER_ACTIONS_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <!-- filter out all requests NOT coming from the user -->
+        <filter class="eu.echa.iuclid6.logging.MdcEventEvaluator">
+            <Key>source</Key>
+            <Value>user</Value>
+            <OnMismatch>DENY</OnMismatch>
+            <OnMatch>NEUTRAL</OnMatch>
+        </filter>
+        <file>${logDirectory}/${userActionsLogFileName}</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>${logArchiveDirectory}/${rolloverInterval}/${userActionsLogFileName}.zip</fileNamePattern>
+            <maxHistory>${numberOfBackups}</maxHistory>
+            <cleanHistoryOnStart>true</cleanHistoryOnStart>
+        </rollingPolicy>
+        <encoder>
+            <pattern>${fileAppenderPattern}</pattern>
+        </encoder>
+    </appender>
+
+    <!-- contains the logs from jobs -->
+    <appender name="JOBS_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <!-- filter out all requests NOT coming from the user -->
+        <filter class="eu.echa.iuclid6.logging.MdcEventEvaluator">
+            <Key>source</Key>
+            <Value>job</Value>
+            <OnMismatch>DENY</OnMismatch>
+            <OnMatch>NEUTRAL</OnMatch>
+        </filter>
+        <file>${logDirectory}/${jobsLogFileName}</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>${logArchiveDirectory}/${rolloverInterval}/${jobsLogFileName}.zip</fileNamePattern>
+            <maxHistory>${numberOfBackups}</maxHistory>
+            <cleanHistoryOnStart>true</cleanHistoryOnStart>
+        </rollingPolicy>
+        <encoder>
+            <pattern>${fileAppenderPattern}</pattern>
+        </encoder>
+    </appender>
+
+    <appender name="SIFT_BY_USER_USER_ACTIONS" class="ch.qos.logback.classic.sift.SiftingAppender">
+        <!-- filter out all requests NOT coming from the user -->
+        <filter class="eu.echa.iuclid6.logging.MdcEventEvaluator">
+            <Key>source</Key>
+            <Value>user</Value>
+            <OnMismatch>DENY</OnMismatch>
+            <OnMatch>NEUTRAL</OnMatch>
+        </filter>
+        <!-- in the absence of the class attribute, it is assumed that the desired discriminator type is ch.qos.logback.classic.sift.MDCBasedDiscriminator -->
+        <discriminator>
+            <key>user</key>
+            <defaultValue>unknown</defaultValue>
+        </discriminator>
+        <sift>
+            <appender name="USERS_FILE_${user}" class="ch.qos.logback.core.rolling.RollingFileAppender">
+                <file>${logDirectory}/users/${user}_${userActionsLogFileName}</file>
+                <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+                    <fileNamePattern>${logArchiveDirectory}/${rolloverInterval}/users/${user}_${userActionsLogFileName}.zip</fileNamePattern>
+                    <maxHistory>${numberOfBackups}</maxHistory>
+                    <cleanHistoryOnStart>true</cleanHistoryOnStart>
+                </rollingPolicy>
+                <encoder>
+                    <pattern>${fileAppenderPattern}</pattern>
+                </encoder>
+            </appender>
+        </sift>
+    </appender>
+
+    <appender name="SIFT_BY_USER_ERROR" class="ch.qos.logback.classic.sift.SiftingAppender">
+        <discriminator>
+            <key>user</key>
+            <defaultValue>unknown</defaultValue>
+        </discriminator>
+        <sift>
+            <appender name="ERROR_FILE_${user}" class="ch.qos.logback.core.rolling.RollingFileAppender">
+                <!-- deny all events with a level below WARN, that is TRACE, DEBUG and INFO -->
+                <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+                    <level>WARN</level>
+                </filter>
+                <file>${logDirectory}/users/${user}_${errorLogFileName}</file>
+                <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+                    <fileNamePattern>${logArchiveDirectory}/${rolloverInterval}/users/${user}_${errorLogFileName}.zip</fileNamePattern>
+                    <maxHistory>${numberOfBackups}</maxHistory>
+                    <cleanHistoryOnStart>true</cleanHistoryOnStart>
+                </rollingPolicy>
+                <encoder>
+                    <pattern>${fileAppenderPattern}</pattern>
+                </encoder>
+            </appender>
+        </sift>
+    </appender>
+
+    <appender name="SIFT_BY_USER_JOBS" class="ch.qos.logback.classic.sift.SiftingAppender">
+        <!-- filter out all requests NOT coming from the background jobs -->
+        <filter class="eu.echa.iuclid6.logging.MdcEventEvaluator">
+            <Key>source</Key>
+            <Value>job</Value>
+            <OnMismatch>DENY</OnMismatch>
+            <OnMatch>NEUTRAL</OnMatch>
+        </filter>
+        <discriminator>
+            <key>user</key>
+            <defaultValue>unknown</defaultValue>
+        </discriminator>
+        <sift>
+            <appender name="JOB_FILE_${user}" class="ch.qos.logback.core.rolling.RollingFileAppender">
+                <file>${logDirectory}/users/${user}_${jobsLogFileName}</file>
+                <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+                    <fileNamePattern>${logArchiveDirectory}/${rolloverInterval}/users/${user}_${jobsLogFileName}.zip</fileNamePattern>
+                    <maxHistory>${numberOfBackups}</maxHistory>
+                    <cleanHistoryOnStart>true</cleanHistoryOnStart>
+                </rollingPolicy>
+                <encoder>
+                    <pattern>${fileAppenderPattern}</pattern>
+                </encoder>
+            </appender>
+        </sift>
+    </appender>
+
+    <appender name="SIFT_BY_REQUEST" class="ch.qos.logback.classic.sift.SiftingAppender">
+        <!-- filter out requests coming from the background jobs poller to reduce clutter -->
+        <filter class="eu.echa.iuclid6.logging.MdcEventEvaluator">
+            <Key>source</Key>
+            <Value>poller</Value>
+            <OnMismatch>NEUTRAL</OnMismatch>
+            <OnMatch>DENY</OnMatch>
+        </filter>
+        <discriminator>
+            <key>request</key>
+            <defaultValue>unknown</defaultValue>
+        </discriminator>
+        <!-- We are effectively stating the following:
+			 - a request will not take longer than 3 minutes
+			 - no more than 10000 requests will have to be handled within a 3 minute interval-->
+        <timeout>3 minutes</timeout>
+        <maxAppenderCount>10000</maxAppenderCount>
+        <sift>
+            <!-- cannot automatically roll this log file, rolling requires actual usage of an appender, these appenders are one-time use only,
+				 rolling if needed must be done externally to logback -->
+            <appender name="REQUEST_FILE_${request}" class="ch.qos.logback.core.FileAppender">
+                <file>${logDirectory}/requests/${request}_${iuclid6Log}</file>
+                <append>false</append>
+                <encoder>
+                    <pattern>${fileAppenderPattern}</pattern>
+                </encoder>
+            </appender>
+        </sift>
+    </appender>
+
+    <appender name="SIFT_BY_JOB" class="ch.qos.logback.classic.sift.SiftingAppender">
+        <!-- filter out all requests NOT coming from the background jobs -->
+        <filter class="eu.echa.iuclid6.logging.MdcEventEvaluator">
+            <Key>source</Key>
+            <Value>job</Value>
+            <OnMismatch>DENY</OnMismatch>
+            <OnMatch>NEUTRAL</OnMatch>
+        </filter>
+        <discriminator>
+            <key>job</key>
+            <defaultValue>unknown</defaultValue>
+        </discriminator>
+        <sift>
+            <!-- cannot automatically roll this log file, rolling requires actual usage of an appender, these appenders are one-time use only,
+				 rolling if needed must be done externally to logback -->
+            <appender name="JOB_FILE_${job}" class="ch.qos.logback.core.FileAppender">
+                <file>${logDirectory}/jobs/${job}_${iuclid6Log}</file>
+                <append>false</append>
+                <encoder>
+                    <pattern>${fileAppenderPattern}</pattern>
+                </encoder>
+            </appender>
+        </sift>
+    </appender>
+
+    <!-- contains the performance logs  -->
+    <appender name="PERF_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${logDirectory}/${perfLogFileName}</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>${logArchiveDirectory}/${rolloverInterval}/${perfLogFileName}.zip</fileNamePattern>
+            <maxHistory>${numberOfBackups}</maxHistory>
+            <cleanHistoryOnStart>true</cleanHistoryOnStart>
+        </rollingPolicy>
+        <encoder>
+            <pattern>${fileAppenderPattern}</pattern>
+        </encoder>
+    </appender>
+
+    <!-- contains the metrics logs  -->
+    <appender name="METRICS_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${logDirectory}/${metricsLogFileName}</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>${logArchiveDirectory}/${rolloverInterval}/${metricsLogFileName}.zip</fileNamePattern>
+            <maxHistory>${numberOfBackups}</maxHistory>
+            <cleanHistoryOnStart>true</cleanHistoryOnStart>
+        </rollingPolicy>
+        <encoder>
+            <pattern>%date{"yyyy-MM-dd'T'HH:mm:ss,SSSXXX", UTC}| ${remoteIpAddress} | %thread | %-5level | %mdc | %msg %n</pattern>
+        </encoder>
+    </appender>
+
+
+    <property name="auditLogFileName" value="audit_${iuclid6Log}" />
+    <!-- below property used from audit log -->
+    <property name="remoteIpAddress" value="%-17([%X{ip_address}])" />
+    <!-- contains the audit logs  -->
+    <appender name="AUDIT_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${logDirectory}/${auditLogFileName}</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>${logArchiveDirectory}/${rolloverInterval}/${auditLogFileName}.zip</fileNamePattern>
+            <maxHistory>${numberOfBackups}</maxHistory>
+            <cleanHistoryOnStart>true</cleanHistoryOnStart>
+        </rollingPolicy>
+        <encoder>
+            <pattern>%date{"yyyy-MM-dd'T'HH:mm:ss,SSSXXX", UTC}| ${remoteIpAddress} | %thread | %-5level | %logger{30} | %mdc | %msg %n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- The audit logger; Use a separate one in order to save some time for parsing the message each time. It is not additive so the logs are not forwarded to any other appenders that may match the format  -->
+    <logger name="auditLogger" level="INFO" additivity="false">
+        <appender-ref ref="AUDIT_FILE" />
+    </logger>
+
+    <!-- The performance logger; Use a separate one in order to save some time for parsing the message each time. It is not additive so the logs are not forwarded to any other appenders that may match the format  -->
+    <logger name="performanceLogger" level="INFO" additivity="false">
+        <appender-ref ref="PERF_FILE" />
+    </logger>
+
+    <logger name="metrics" level="DEBUG" additivity="false">
+        <appender-ref ref="METRICS_FILE" />
+    </logger>
+
+    <logger name="eu.echa.iuclid6.comm.server.monitoring" level="INFO" additivity="false">
+        <appender-ref ref="STDOUT"/>
+    </logger>
+
+    <logger name="eu.echa.iuclid6" level="INFO" />
+    <logger name="com.trasysgroup.configuration" level="ERROR" />
+    <logger name="Events.Bundle" level="INFO"/>
+    <logger name="Events.Service" level="INFO"/>
+    <logger name="Events.Framework" level="INFO"/>
+
+    <root level="INFO">
+        <appender-ref ref="STDOUT" />
+        <appender-ref ref="ERROR_FILE" />
+        <appender-ref ref="MAIN_FILE" />
+        <appender-ref ref="USER_ACTIONS_FILE" />
+        <appender-ref ref="JOBS_FILE" />
+        <appender-ref ref="SIFT_BY_USER_USER_ACTIONS" />
+        <appender-ref ref="SIFT_BY_USER_ERROR" />
+        <appender-ref ref="SIFT_BY_USER_JOBS" />
+        <appender-ref ref="SIFT_BY_REQUEST" />
+        <appender-ref ref="SIFT_BY_JOB" />
+    </root>
+
+</configuration>
